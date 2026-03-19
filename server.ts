@@ -36,10 +36,16 @@ async function startServer() {
       const apiSecret = process.env.CLOUDINARY_API_SECRET;
       const uploadPreset = process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-      if (!cloudName || !apiKey || !apiSecret || !uploadPreset) {
-        console.error("Missing Cloudinary environment variables");
+      const missing = [];
+      if (!cloudName) missing.push("VITE_CLOUDINARY_CLOUD_NAME");
+      if (!apiKey) missing.push("CLOUDINARY_API_KEY");
+      if (!apiSecret) missing.push("CLOUDINARY_API_SECRET");
+      if (!uploadPreset) missing.push("VITE_CLOUDINARY_UPLOAD_PRESET");
+
+      if (missing.length > 0) {
+        console.error(`Missing Cloudinary environment variables: ${missing.join(", ")}`);
         return res.status(500).json({ 
-          error: "Cloudinary configuration is incomplete on the server." 
+          error: `Cloudinary configuration is incomplete. Missing: ${missing.join(", ")}` 
         });
       }
 
