@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - name: string (optional)
+    //   - role: string (required, ['student', 'staff', 'admin'])
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: papers
+    // Document ID: {paperId}
+    // Fields:
+    //   - title: string (required)
+    //   - subjectCode: string (required)
+    //   - school: string (required, enum)
+    //   - semester: number (required)
+    //   - year: number (required)
+    //   - pdfUrl: string (required, uri)
+    //   - uploaderUid: string (required)
+    //   - status: string (required, ['pending', 'approved', 'rejected'])
+    //   - downloadCount: number (optional)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: downloads
+    // Document ID: {downloadId}
+    // Fields:
+    //   - paperId: string (required)
+    //   - userUid: string (required)
+    //   - timestamp: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff';
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['student', 'staff', 'admin'];
+    }
+
+    function isValidPaper(data) {
+      return data.keys().hasAll(['title', 'subjectCode', 'school', 'semester', 'year', 'pdfUrl', 'uploaderUid', 'status']) &&
+             data.title is string && data.title.size() < 200 &&
+             data.subjectCode is string && data.subjectCode.size() < 20 &&
+             data.school in ['ICT', 'Engineering', 'Management', 'Law', 'Biotechnology', 'Buddhist Studies', 'Humanities', 'Vocational Studies'] &&
+             data.semester is number && data.year is number &&
+             data.pdfUrl is string &&
+             data.uploaderUid is string &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      // Only allow creation by the initial admin (bootstrap) or existing admins
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (request.auth.token.email == "rajan.fr0911@gmail.com" || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+    }
+
+    match /papers/{paperId} {
+      allow read: if resource.data.status == 'approved' || isAdmin() || (isAuthenticated() && resource.data.uploaderUid == request.auth.uid);
+      allow create: if isValidPaper(request.resource.data) && 
+                    request.resource.data.status == 'pending' &&
+                    (
+                      (isAuthenticated() && (isStaff() || isAdmin()) && request.resource.data.uploaderUid == request.auth.uid) ||
+                      (!isAuthenticated() && request.resource.data.uploaderUid == 'anonymous')
+                    );
+      allow update: if (isAuthenticated() && isValidPaper(request.resource.data) && 
+                    (isAdmin() || (isStaff() && resource.data.uploaderUid == request.auth.uid && resource.data.status == 'pending'))) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadCount']) &&
+                     request.resource.data.downloadCount == resource.data.downloadCount + 1);
+      allow delete: if isAdmin();
+    }
+
+    match /downloads/{downloadId} {
+      allow read: if isAdmin();
+      allow create: if (isAuthenticated() && request.resource.data.userUid == request.auth.uid) ||
+                    (!isAuthenticated() && request.resource.data.userUid == 'anonymous');
+    }
+  }
+}

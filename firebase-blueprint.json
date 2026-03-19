@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "staff", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Paper": {
+      "title": "Paper",
+      "description": "Previous year question paper metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subjectCode": { "type": "string" },
+        "school": { "type": "string", "enum": ["ICT", "Engineering", "Management", "Law", "Biotechnology", "Buddhist Studies", "Humanities", "Vocational Studies"] },
+        "semester": { "type": "integer" },
+        "year": { "type": "integer" },
+        "pdfUrl": { "type": "string", "format": "uri" },
+        "uploaderUid": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "downloadCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "subjectCode", "school", "semester", "year", "pdfUrl", "uploaderUid", "status"]
+    },
+    "Download": {
+      "title": "Download",
+      "description": "Record of a paper download",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "paperId": { "type": "string" },
+        "userUid": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["paperId", "userUid", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/papers/{paperId}": {
+      "schema": "Paper",
+      "description": "Question papers collection"
+    },
+    "/downloads/{downloadId}": {
+      "schema": "Download",
+      "description": "Download history"
+    }
+  }
+}
