@@ -31,10 +31,10 @@ async function startServer() {
   // Cloudinary signature endpoint (for secure client-side uploads)
   app.get("/api/cloudinary-signature", (req, res) => {
     try {
-      const cloudName = process.env.VITE_CLOUDINARY_CLOUD_NAME;
-      const apiKey = process.env.CLOUDINARY_API_KEY;
-      const apiSecret = process.env.CLOUDINARY_API_SECRET;
-      const uploadPreset = process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+      const cloudName = process.env.VITE_CLOUDINARY_CLOUD_NAME?.trim();
+      const apiKey = process.env.CLOUDINARY_API_KEY?.trim();
+      const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim();
+      const uploadPreset = process.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim();
 
       const missing = [];
       if (!cloudName) missing.push("VITE_CLOUDINARY_CLOUD_NAME");

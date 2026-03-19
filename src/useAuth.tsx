@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { auth, onAuthStateChanged, db, doc, getDoc, setDoc, serverTimestamp, FirebaseUser, signInWithPopup, googleProvider, handleFirestoreError, OperationType } from './firebase';
+import { auth, onAuthStateChanged, db, doc, getDoc, updateDoc, setDoc, serverTimestamp, FirebaseUser, signInWithPopup, googleProvider, handleFirestoreError, OperationType } from './firebase';
 import { UserProfile, UserRole } from './types';
 
 interface AuthContextType {
@@ -33,10 +33,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (userDoc.exists()) {
-          setProfile(userDoc.data() as UserProfile);
+          const data = userDoc.data() as UserProfile;
+          // Ensure initial admin always has admin role
+          const initialAdminEmail = process.env.VITE_INITIAL_ADMIN_EMAIL || 'rajan.fr0911@gmail.com';
+          if (firebaseUser.email === initialAdminEmail && data.role !== 'admin') {
+            const updatedProfile = { ...data, role: 'admin' as const };
+            try {
+              await updateDoc(userDocRef, { role: 'admin' });
+            } catch (err) {
+              handleFirestoreError(err, OperationType.UPDATE, `users/${firebaseUser.uid}`, 'useAuth: Update Initial Admin Role');
+            }
+            setProfile(updatedProfile);
+          } else {
+            setProfile(data);
+          }
         } else {
           // Check if this is the initial admin bootstrap
-          const initialAdminEmail = (import.meta as any).env.VITE_INITIAL_ADMIN_EMAIL || 'rajan.fr0911@gmail.com';
+          const initialAdminEmail = process.env.VITE_INITIAL_ADMIN_EMAIL || 'rajan.fr0911@gmail.com';
           if (firebaseUser.email === initialAdminEmail) {
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,

@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import { LogIn, LogOut, Search, Upload, Shield, BookOpen, User } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -10,16 +11,16 @@ export function Header() {
     <header className="border-b border-white/10 bg-[#050505] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <BookOpen className="w-8 h-8 text-emerald-500" />
-            <span className="text-xl font-bold tracking-tighter text-white">GBU PORTAL</span>
-          </div>
+            <span className="text-xl font-bold tracking-tighter text-white uppercase">GBU PORTAL</span>
+          </Link>
           
           <nav className="hidden md:flex items-center space-x-8">
-            <a href="/" className="text-sm font-medium text-gray-400 hover:text-emerald-500 transition-colors">Search</a>
-            <a href="/upload" className="text-sm font-medium text-gray-400 hover:text-emerald-500 transition-colors">Upload</a>
+            <Link to="/" className="text-sm font-medium text-gray-400 hover:text-emerald-500 transition-colors">Search</Link>
+            <Link to="/upload" className="text-sm font-medium text-gray-400 hover:text-emerald-500 transition-colors">Upload</Link>
             {profile?.role === 'admin' && (
-              <a href="/admin" className="text-sm font-medium text-gray-400 hover:text-emerald-500 transition-colors">Admin</a>
+              <Link to="/admin" className="text-sm font-medium text-gray-400 hover:text-emerald-500 transition-colors">Admin</Link>
             )}
           </nav>
 
@@ -63,8 +64,10 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <BookOpen className="w-6 h-6 text-emerald-500" />
-              <span className="text-lg font-bold tracking-tighter text-white">GBU PORTAL</span>
+              <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <BookOpen className="w-6 h-6 text-emerald-500" />
+                <span className="text-lg font-bold tracking-tighter text-white uppercase">GBU PORTAL</span>
+              </Link>
             </div>
             <p className="text-sm text-gray-500 font-mono uppercase tracking-widest">
               Made by GBU student
@@ -73,9 +76,9 @@ export function Footer() {
           <div>
             <h4 className="text-xs font-mono text-emerald-500 uppercase tracking-widest mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li><a href="/" className="hover:text-white transition-colors">Search Papers</a></li>
-              <li><a href="/upload" className="hover:text-white transition-colors">Contribute</a></li>
-              <li><a href="/about" className="hover:text-white transition-colors">About GBU</a></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Search Papers</Link></li>
+              <li><Link to="/upload" className="hover:text-white transition-colors">Contribute</Link></li>
+              <li><Link to="/about" className="hover:text-white transition-colors">About GBU</Link></li>
             </ul>
           </div>
         </div>
