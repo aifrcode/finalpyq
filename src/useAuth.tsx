@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           userDoc = await getDoc(userDocRef);
         } catch (err) {
-          handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
+          handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`, 'useAuth: Fetch Profile');
           setLoading(false);
           return;
         }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
               await setDoc(userDocRef, newProfile);
             } catch (err) {
-              handleFirestoreError(err, OperationType.WRITE, `users/${firebaseUser.uid}`);
+              handleFirestoreError(err, OperationType.WRITE, `users/${firebaseUser.uid}`, 'useAuth: Create Initial Admin');
             }
             setProfile(newProfile);
           } else {

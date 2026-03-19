@@ -26,7 +26,7 @@ function Home() {
       const totalDownloads = snapshot.docs.reduce((acc, doc) => acc + (doc.data().downloadCount || 0), 0);
       setStats({ totalPapers, totalDownloads });
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'papers');
+      handleFirestoreError(error, OperationType.LIST, 'papers', 'App: Fetch Stats');
     });
 
     // Fetch papers with filters
@@ -59,7 +59,7 @@ function Home() {
       setPapers(filteredPapers);
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'papers');
+      handleFirestoreError(error, OperationType.LIST, 'papers', 'App: Fetch Filtered Papers');
     });
 
     return () => {

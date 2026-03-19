@@ -40,7 +40,17 @@ export function PaperUpload() {
 
   const uploadToCloudinary = async (file: File) => {
     // 1. Get signature from server
-    const sigResponse = await fetch('/api/cloudinary-signature');
+    let sigResponse;
+    try {
+      sigResponse = await fetch('/api/cloudinary-signature');
+    } catch (e) {
+      throw new Error('Network error: Could not reach the signature server.');
+    }
+
+    if (!sigResponse.ok) {
+      const errorData = await sigResponse.json();
+      throw new Error(`Signature Error: ${errorData.error || 'Failed to get upload signature'}`);
+    }
     const { signature, timestamp, cloud_name, api_key } = await sigResponse.json();
 
     // 2. Upload to Cloudinary
@@ -49,18 +59,28 @@ export function PaperUpload() {
     formData.append('signature', signature);
     formData.append('timestamp', timestamp);
     formData.append('api_key', api_key);
-    formData.append('upload_preset', process.env.VITE_CLOUDINARY_UPLOAD_PRESET!);
+    const uploadPreset = process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+    if (!uploadPreset) {
+      throw new Error('Config Error: Cloudinary upload preset is not configured in environment.');
+    }
+    formData.append('upload_preset', uploadPreset);
 
-    const uploadResponse = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloud_name}/raw/upload`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+    let uploadResponse;
+    try {
+      uploadResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloud_name}/raw/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+    } catch (e) {
+      throw new Error('Network error: Could not connect to Cloudinary servers.');
+    }
 
     if (!uploadResponse.ok) {
-      throw new Error('Failed to upload to Cloudinary');
+      const errorData = await uploadResponse.json();
+      throw new Error(`Cloudinary Error: ${errorData.error?.message || 'Failed to upload to Cloudinary'}`);
     }
 
     const uploadData = await uploadResponse.json();
@@ -87,7 +107,7 @@ export function PaperUpload() {
           createdAt: serverTimestamp()
         });
       } catch (firestoreErr) {
-        handleFirestoreError(firestoreErr, OperationType.CREATE, 'papers');
+        handleFirestoreError(firestoreErr, OperationType.CREATE, 'papers', 'PaperUpload: Save to Firestore');
       }
 
       setSuccess(true);
@@ -100,9 +120,22 @@ export function PaperUpload() {
         semester: '',
         year: new Date().getFullYear()
       });
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError('Failed to upload paper. Please try again.');
+    } catch (err: any) {
+      console.error('Upload Process Error:', err);
+      let errorMessage = 'Failed to upload paper. Please try again.';
+      
+      // Check if it's a Firestore error (JSON string)
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed.error) {
+          errorMessage = `[Database Error] ${parsed.error}. (Context: ${parsed.context || 'Unknown'})`;
+        }
+      } catch (e) {
+        // Not a JSON error, use the raw message if available
+        errorMessage = err.message || errorMessage;
+      }
+      
+      setError(errorMessage);
     } finally {
       setUploading(false);
     }

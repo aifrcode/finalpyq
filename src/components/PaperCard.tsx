@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Paper, School } from '../types';
-import { Download, FileText, Calendar, GraduationCap, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Download, FileText, Calendar, GraduationCap, Clock, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { db, doc, updateDoc, increment, addDoc, collection, serverTimestamp, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../useAuth';
@@ -14,8 +15,10 @@ interface PaperCardProps {
 
 export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: PaperCardProps) {
   const { user } = useAuth();
+  const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
+    setDownloading(true);
     try {
       // Record download
       try {
@@ -25,7 +28,7 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
           timestamp: serverTimestamp()
         });
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, 'downloads');
+        handleFirestoreError(err, OperationType.CREATE, 'downloads', 'PaperCard: Record Download');
       }
 
       // Increment download count
@@ -34,13 +37,23 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
           downloadCount: increment(1)
         });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `papers/${paper.id}`);
+        handleFirestoreError(err, OperationType.UPDATE, `papers/${paper.id}`, 'PaperCard: Increment Download Count');
       }
 
-      // Open PDF in new tab
-      window.open(paper.pdfUrl, '_blank');
+      // Open PDF in new tab - using a more reliable method for async contexts
+      const link = document.createElement('a');
+      link.href = paper.pdfUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (error) {
       console.error('Download error:', error);
+      alert('Failed to record download. The PDF will still open.');
+      window.open(paper.pdfUrl, '_blank');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -125,11 +138,21 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
 
       {!isAdminView && (
         <button 
+          disabled={downloading}
           onClick={handleDownload}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-emerald-500 hover:text-black transition-all duration-300"
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white font-bold text-sm hover:bg-emerald-500 hover:text-black disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
         >
-          <Download className="w-4 h-4" />
-          DOWNLOAD PDF
+          {downloading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              PREPARING...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4" />
+              DOWNLOAD PDF
+            </>
+          )}
         </button>
       )}
     </motion.div>

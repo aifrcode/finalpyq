@@ -23,7 +23,7 @@ export function AdminDashboard() {
       setPapers(papersData);
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'papers');
+      handleFirestoreError(error, OperationType.LIST, 'papers', 'AdminDashboard: Fetch Papers');
     });
 
     // Listen for users
@@ -32,7 +32,7 @@ export function AdminDashboard() {
       const usersData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })) as UserProfile[];
       setUsers(usersData);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
+      handleFirestoreError(error, OperationType.LIST, 'users', 'AdminDashboard: Fetch Users');
     });
 
     return () => {
@@ -45,7 +45,7 @@ export function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'papers', id), { status });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `papers/${id}`);
+      handleFirestoreError(error, OperationType.UPDATE, `papers/${id}`, 'AdminDashboard: Change Paper Status');
     }
   };
 
@@ -54,7 +54,7 @@ export function AdminDashboard() {
     try {
       await deleteDoc(doc(db, 'papers', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `papers/${id}`);
+      handleFirestoreError(error, OperationType.DELETE, `papers/${id}`, 'AdminDashboard: Delete Paper');
     }
   };
 
@@ -62,7 +62,7 @@ export function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'users', uid), { role });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
+      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`, 'AdminDashboard: Change User Role');
     }
   };
 
