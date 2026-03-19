@@ -1,7 +1,7 @@
 import { Paper, School } from '../types';
 import { Download, FileText, Calendar, GraduationCap, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-import { db, doc, updateDoc, increment, addDoc, collection, serverTimestamp } from '../firebase';
+import { db, doc, updateDoc, increment, addDoc, collection, serverTimestamp, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../useAuth';
 
 interface PaperCardProps {
@@ -18,16 +18,24 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
   const handleDownload = async () => {
     try {
       // Record download
-      await addDoc(collection(db, 'downloads'), {
-        paperId: paper.id,
-        userUid: user ? user.uid : 'anonymous',
-        timestamp: serverTimestamp()
-      });
+      try {
+        await addDoc(collection(db, 'downloads'), {
+          paperId: paper.id,
+          userUid: user ? user.uid : 'anonymous',
+          timestamp: serverTimestamp()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, 'downloads');
+      }
 
       // Increment download count
-      await updateDoc(doc(db, 'papers', paper.id), {
-        downloadCount: increment(1)
-      });
+      try {
+        await updateDoc(doc(db, 'papers', paper.id), {
+          downloadCount: increment(1)
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `papers/${paper.id}`);
+      }
 
       // Open PDF in new tab
       window.open(paper.pdfUrl, '_blank');

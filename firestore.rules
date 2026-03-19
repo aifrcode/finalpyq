@@ -21,6 +21,7 @@ service cloud.firestore {
     //   - title: string (required)
     //   - subjectCode: string (required)
     //   - school: string (required, enum)
+    //   - examType: string (required, enum)
     //   - semester: number (required)
     //   - year: number (required)
     //   - pdfUrl: string (required, uri)
@@ -66,10 +67,11 @@ service cloud.firestore {
     }
 
     function isValidPaper(data) {
-      return data.keys().hasAll(['title', 'subjectCode', 'school', 'semester', 'year', 'pdfUrl', 'uploaderUid', 'status']) &&
+      return data.keys().hasAll(['title', 'subjectCode', 'school', 'examType', 'semester', 'year', 'pdfUrl', 'uploaderUid', 'status']) &&
              data.title is string && data.title.size() < 200 &&
              data.subjectCode is string && data.subjectCode.size() < 20 &&
              data.school in ['ICT', 'Engineering', 'Management', 'Law', 'Biotechnology', 'Buddhist Studies', 'Humanities', 'Vocational Studies'] &&
+             data.examType in ['Mid-Term', 'Final', 'Back-Paper'] &&
              data.semester is number && data.year is number &&
              data.pdfUrl is string &&
              data.uploaderUid is string &&

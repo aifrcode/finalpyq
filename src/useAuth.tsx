@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { auth, onAuthStateChanged, db, doc, getDoc, setDoc, serverTimestamp, FirebaseUser, signInWithPopup, googleProvider } from './firebase';
+import { auth, onAuthStateChanged, db, doc, getDoc, setDoc, serverTimestamp, FirebaseUser, signInWithPopup, googleProvider, handleFirestoreError, OperationType } from './firebase';
 import { UserProfile, UserRole } from './types';
 
 interface AuthContextType {
@@ -23,13 +23,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         // Fetch profile
         const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDoc = await getDoc(userDocRef);
+        let userDoc;
+        try {
+          userDoc = await getDoc(userDocRef);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
+          setLoading(false);
+          return;
+        }
         
         if (userDoc.exists()) {
           setProfile(userDoc.data() as UserProfile);
         } else {
           // Check if this is the initial admin bootstrap
-          const initialAdminEmail = (import.meta as any).env.VITE_INITIAL_ADMIN_EMAIL;
+          const initialAdminEmail = (import.meta as any).env.VITE_INITIAL_ADMIN_EMAIL || 'rajan.fr0911@gmail.com';
           if (firebaseUser.email === initialAdminEmail) {
             const newProfile: UserProfile = {
               uid: firebaseUser.uid,
@@ -38,7 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: 'admin',
               createdAt: serverTimestamp() as any
             };
-            await setDoc(userDocRef, newProfile);
+            try {
+              await setDoc(userDocRef, newProfile);
+            } catch (err) {
+              handleFirestoreError(err, OperationType.WRITE, `users/${firebaseUser.uid}`);
+            }
             setProfile(newProfile);
           } else {
             // No profile and not initial admin - user is unauthorized

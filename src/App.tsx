@@ -6,7 +6,7 @@ import { PaperSearch } from './components/PaperSearch';
 import { PaperCard } from './components/PaperCard';
 import { PaperUpload } from './components/PaperUpload';
 import { AdminDashboard } from './components/AdminDashboard';
-import { db, collection, query, where, onSnapshot, orderBy, limit } from './firebase';
+import { db, collection, query, where, onSnapshot, orderBy, limit, handleFirestoreError, OperationType } from './firebase';
 import { Paper, School, ExamType } from './types';
 import { BookOpen, Download, Users, FileText, ArrowRight, Loader2, Search, Shield } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -25,6 +25,8 @@ function Home() {
       const totalPapers = snapshot.size;
       const totalDownloads = snapshot.docs.reduce((acc, doc) => acc + (doc.data().downloadCount || 0), 0);
       setStats({ totalPapers, totalDownloads });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'papers');
     });
 
     // Fetch papers with filters
@@ -56,6 +58,8 @@ function Home() {
 
       setPapers(filteredPapers);
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'papers');
     });
 
     return () => {

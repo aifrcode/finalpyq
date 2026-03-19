@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../useAuth';
-import { db, collection, addDoc, serverTimestamp } from '../firebase';
+import { db, collection, addDoc, serverTimestamp, handleFirestoreError, OperationType } from '../firebase';
 import { School, ExamType, SCHOOLS, EXAM_TYPES, SEMESTERS } from '../types';
 import { Upload, FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -77,14 +77,18 @@ export function PaperUpload() {
     try {
       const pdfUrl = await uploadToCloudinary(file);
 
-      await addDoc(collection(db, 'papers'), {
-        ...formData,
-        pdfUrl,
-        uploaderUid: user ? user.uid : 'anonymous',
-        status: 'pending',
-        downloadCount: 0,
-        createdAt: serverTimestamp()
-      });
+      try {
+        await addDoc(collection(db, 'papers'), {
+          ...formData,
+          pdfUrl,
+          uploaderUid: user ? user.uid : 'anonymous',
+          status: 'pending',
+          downloadCount: 0,
+          createdAt: serverTimestamp()
+        });
+      } catch (firestoreErr) {
+        handleFirestoreError(firestoreErr, OperationType.CREATE, 'papers');
+      }
 
       setSuccess(true);
       setFile(null);

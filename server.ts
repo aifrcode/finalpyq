@@ -30,21 +30,38 @@ async function startServer() {
 
   // Cloudinary signature endpoint (for secure client-side uploads)
   app.get("/api/cloudinary-signature", (req, res) => {
-    const timestamp = Math.round(new Date().getTime() / 1000);
-    const signature = cloudinary.utils.api_sign_request(
-      {
-        timestamp: timestamp,
-        upload_preset: process.env.VITE_CLOUDINARY_UPLOAD_PRESET,
-      },
-      process.env.CLOUDINARY_API_SECRET!
-    );
+    try {
+      const cloudName = process.env.VITE_CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      const uploadPreset = process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-    res.json({
-      signature,
-      timestamp,
-      cloud_name: process.env.VITE_CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-    });
+      if (!cloudName || !apiKey || !apiSecret || !uploadPreset) {
+        console.error("Missing Cloudinary environment variables");
+        return res.status(500).json({ 
+          error: "Cloudinary configuration is incomplete on the server." 
+        });
+      }
+
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const signature = cloudinary.utils.api_sign_request(
+        {
+          timestamp: timestamp,
+          upload_preset: uploadPreset,
+        },
+        apiSecret
+      );
+
+      res.json({
+        signature,
+        timestamp,
+        cloud_name: cloudName,
+        api_key: apiKey,
+      });
+    } catch (error) {
+      console.error("Signature generation error:", error);
+      res.status(500).json({ error: "Failed to generate upload signature." });
+    }
   });
 
   // Vite middleware for development

@@ -22,6 +22,7 @@
         "title": { "type": "string" },
         "subjectCode": { "type": "string" },
         "school": { "type": "string", "enum": ["ICT", "Engineering", "Management", "Law", "Biotechnology", "Buddhist Studies", "Humanities", "Vocational Studies"] },
+        "examType": { "type": "string", "enum": ["Mid-Term", "Final", "Back-Paper"] },
         "semester": { "type": "integer" },
         "year": { "type": "integer" },
         "pdfUrl": { "type": "string", "format": "uri" },
@@ -30,7 +31,7 @@
         "downloadCount": { "type": "integer" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["title", "subjectCode", "school", "semester", "year", "pdfUrl", "uploaderUid", "status"]
+      "required": ["title", "subjectCode", "school", "examType", "semester", "year", "pdfUrl", "uploaderUid", "status"]
     },
     "Download": {
       "title": "Download",

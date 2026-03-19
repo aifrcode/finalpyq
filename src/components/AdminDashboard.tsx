@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../useAuth';
-import { db, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, orderBy } from '../firebase';
+import { db, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, orderBy, handleFirestoreError, OperationType } from '../firebase';
 import { Paper, UserProfile, UserRole } from '../types';
 import { PaperCard } from './PaperCard';
 import { Shield, Users, FileText, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
@@ -22,6 +22,8 @@ export function AdminDashboard() {
       const papersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Paper[];
       setPapers(papersData);
       setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'papers');
     });
 
     // Listen for users
@@ -29,6 +31,8 @@ export function AdminDashboard() {
     const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
       const usersData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })) as UserProfile[];
       setUsers(usersData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
     return () => {
@@ -41,7 +45,7 @@ export function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'papers', id), { status });
     } catch (error) {
-      console.error('Status change error:', error);
+      handleFirestoreError(error, OperationType.UPDATE, `papers/${id}`);
     }
   };
 
@@ -50,7 +54,7 @@ export function AdminDashboard() {
     try {
       await deleteDoc(doc(db, 'papers', id));
     } catch (error) {
-      console.error('Delete paper error:', error);
+      handleFirestoreError(error, OperationType.DELETE, `papers/${id}`);
     }
   };
 
@@ -58,7 +62,7 @@ export function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'users', uid), { role });
     } catch (error) {
-      console.error('Role change error:', error);
+      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
     }
   };
 
