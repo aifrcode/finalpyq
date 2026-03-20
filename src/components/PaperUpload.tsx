@@ -51,7 +51,7 @@ export function PaperUpload() {
       const errorData = await sigResponse.json();
       throw new Error(`Signature Error: ${errorData.error || 'Failed to get upload signature'}`);
     }
-    const { signature, timestamp, cloud_name, api_key } = await sigResponse.json();
+    const { signature, timestamp, cloud_name, api_key, upload_preset } = await sigResponse.json();
 
     // 2. Upload to Cloudinary
     const formData = new FormData();
@@ -59,11 +59,7 @@ export function PaperUpload() {
     formData.append('signature', signature);
     formData.append('timestamp', timestamp);
     formData.append('api_key', api_key);
-    const uploadPreset = process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
-    if (!uploadPreset) {
-      throw new Error('Config Error: Cloudinary upload preset is not configured in environment.');
-    }
-    formData.append('upload_preset', uploadPreset);
+    formData.append('upload_preset', upload_preset);
 
     let uploadResponse;
     try {
