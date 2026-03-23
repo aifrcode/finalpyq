@@ -27,6 +27,17 @@ export function PaperUpload() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const THANK_YOU_MESSAGES = [
+    "Thanks for your effort! You're making the portal better for everyone.",
+    "Great job! Your contribution helps fellow students succeed.",
+    "Awesome! Thanks for sharing your resources with the community.",
+    "You're a star! Thank you for helping us build this archive.",
+    "Thank you for your valuable contribution to the GBU Portal!",
+    "Your effort is highly appreciated. Thanks for the upload!",
+    "Success! Thank you for helping your peers with this paper."
+  ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -93,14 +104,8 @@ export function PaperUpload() {
       throw error;
     }
 
-    setUploadProgress(90);
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('papers')
-      .getPublicUrl(filePath);
-
     setUploadProgress(100);
-    return publicUrl;
+    return fileName; // Return only the filename
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,6 +129,8 @@ export function PaperUpload() {
           createdAt: serverTimestamp()
         });
         toast.success('Paper submitted successfully!');
+        const randomMessage = THANK_YOU_MESSAGES[Math.floor(Math.random() * THANK_YOU_MESSAGES.length)];
+        setSuccessMessage(randomMessage);
       } catch (firestoreErr) {
         handleFirestoreError(firestoreErr, OperationType.CREATE, 'papers', 'PaperUpload: Save to Firestore');
       }
@@ -185,7 +192,11 @@ export function PaperUpload() {
         >
           <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">UPLOAD SUCCESSFUL</h2>
-          <p className="text-gray-400 mb-8">Your paper has been submitted and is currently pending review by an administrator.</p>
+          <p className="text-emerald-500 font-medium mb-2">{successMessage}</p>
+          <p className="text-gray-400 mb-8 flex flex-col gap-1">
+            <span>Your paper has been submitted.</span>
+            <span className="text-amber-500 font-bold uppercase text-xs tracking-widest">Please wait for an administrator to verify it.</span>
+          </p>
           <button 
             onClick={() => setSuccess(false)}
             className="px-8 py-3 rounded-xl bg-emerald-500 text-black font-bold hover:bg-emerald-400 transition-colors"

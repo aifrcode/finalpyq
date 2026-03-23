@@ -3,6 +3,7 @@ import { Paper, School } from '../types';
 import { Download, FileText, Calendar, GraduationCap, Clock, CheckCircle, XCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, updateDoc, increment, addDoc, collection, serverTimestamp, handleFirestoreError, OperationType } from '../firebase';
+import { supabase } from '../supabase';
 import { useAuth } from '../useAuth';
 
 interface PaperCardProps {
@@ -17,6 +18,20 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
   const { user } = useAuth();
   const [showPreview, setShowPreview] = useState(false);
 
+  const getPdfUrl = () => {
+    if (!paper.pdfUrl) return '';
+    // If it's already a full URL (legacy), return it
+    if (paper.pdfUrl.startsWith('http')) return paper.pdfUrl;
+    
+    // Otherwise, construct the Supabase public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('papers')
+      .getPublicUrl(paper.pdfUrl);
+    return publicUrl;
+  };
+
+  const fullPdfUrl = getPdfUrl();
+
   const handleDownload = () => {
     // Log download count (non-blocking)
     updateDoc(doc(db, 'papers', paper.id), {
@@ -29,7 +44,7 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
       timestamp: serverTimestamp()
     }).catch(console.error);
 
-    window.open(paper.pdfUrl, '_blank');
+    window.open(fullPdfUrl, '_blank');
   };
 
   const getStatusIcon = (status: string) => {
@@ -96,7 +111,7 @@ export function PaperCard({ paper, isAdminView, onStatusChange, onDelete }: Pape
             className="overflow-hidden mb-6 rounded-2xl border border-white/10"
           >
             <iframe 
-              src={paper.pdfUrl} 
+              src={fullPdfUrl} 
               className="w-full h-96 bg-white" 
               title={`Preview of ${paper.title}`}
             />

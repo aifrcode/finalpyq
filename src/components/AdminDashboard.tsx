@@ -58,17 +58,27 @@ export function AdminDashboard() {
     // window.confirm can be unreliable in iframes, so we'll proceed directly 
     // or you could implement a custom React modal for confirmation.
     try {
-      // 1. Delete from Supabase Storage if it's a Supabase URL
-      if (paper.pdfUrl && paper.pdfUrl.includes('supabase.co')) {
-        try {
+      // 1. Delete from Supabase Storage
+      if (paper.pdfUrl) {
+        let fileName = '';
+        
+        if (paper.pdfUrl.startsWith('http')) {
+          // Legacy full URL
           const urlParts = paper.pdfUrl.split('/');
-          const fileName = urlParts[urlParts.length - 1];
-          
-          await supabase.storage
-            .from('papers')
-            .remove([fileName]);
-        } catch (storageErr) {
-          console.error('Error deleting from Supabase Storage:', storageErr);
+          fileName = urlParts[urlParts.length - 1];
+        } else {
+          // New filename-only format
+          fileName = paper.pdfUrl;
+        }
+
+        if (fileName) {
+          try {
+            await supabase.storage
+              .from('papers')
+              .remove([fileName]);
+          } catch (storageErr) {
+            console.error('Error deleting from Supabase Storage:', storageErr);
+          }
         }
       }
 
@@ -80,25 +90,30 @@ export function AdminDashboard() {
     }
   };
 
-  const handleDeleteCloudinaryPapers = async () => {
-    const cloudinaryPapers = papers.filter(p => p.pdfUrl && p.pdfUrl.includes('cloudinary.com'));
-    if (cloudinaryPapers.length === 0) {
-      toast.error('No Cloudinary papers found');
-      return;
-    }
-
-    if (!window.confirm(`Are you sure you want to delete all ${cloudinaryPapers.length} Cloudinary-hosted papers?`)) return;
+  const handleDeleteAllPapers = async () => {
+    if (!window.confirm('CRITICAL: Are you sure you want to delete ALL papers from the database and storage? This cannot be undone.')) return;
 
     setLoading(true);
     let deletedCount = 0;
     try {
-      for (const paper of cloudinaryPapers) {
+      for (const paper of papers) {
+        // 1. Delete from Supabase Storage
+        if (paper.pdfUrl) {
+          let fileName = paper.pdfUrl.startsWith('http') 
+            ? paper.pdfUrl.split('/').pop() 
+            : paper.pdfUrl;
+
+          if (fileName) {
+            await supabase.storage.from('papers').remove([fileName]);
+          }
+        }
+        // 2. Delete from Firestore
         await deleteDoc(doc(db, 'papers', paper.id));
         deletedCount++;
       }
-      toast.success(`Successfully deleted ${deletedCount} Cloudinary papers`);
+      toast.success(`Successfully deleted ${deletedCount} papers`);
     } catch (error) {
-      toast.error('Failed to delete some papers');
+      toast.error('Failed to delete all papers');
       console.error(error);
     } finally {
       setLoading(false);
@@ -338,23 +353,23 @@ export function AdminDashboard() {
           )}
 
           {activeTab === 'maintenance' && (
-            <div className="max-w-xl space-y-8">
+            <div className="max-w-4xl space-y-8">
               <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
                 <h3 className="text-xl font-bold text-white uppercase tracking-tight">System Maintenance</h3>
-                <p className="text-gray-500 text-sm">Perform bulk actions to clean up the database and storage.</p>
+                <p className="text-gray-500 text-sm">Perform bulk actions to manage the portal's data.</p>
                 
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-6 rounded-2xl bg-red-500/5 border border-red-500/10 space-y-4">
                     <div className="flex items-center gap-3 text-red-500">
                       <AlertCircle className="w-5 h-5" />
-                      <span className="text-sm font-bold uppercase tracking-tight">Cloudinary Cleanup</span>
+                      <span className="text-sm font-bold uppercase tracking-tight">Clear Database</span>
                     </div>
-                    <p className="text-xs text-gray-500">Delete all papers that are still hosted on Cloudinary. This will remove them from the portal permanently.</p>
+                    <p className="text-xs text-gray-500">Permanently delete ALL papers from Firestore and Supabase Storage.</p>
                     <button 
-                      onClick={handleDeleteCloudinaryPapers}
+                      onClick={handleDeleteAllPapers}
                       className="w-full py-3 rounded-xl bg-red-500 text-white font-bold text-xs hover:bg-red-600 transition-colors"
                     >
-                      DELETE ALL CLOUDINARY PAPERS
+                      DELETE ALL PAPERS
                     </button>
                   </div>
 
