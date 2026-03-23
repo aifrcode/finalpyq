@@ -70,9 +70,11 @@ export function PaperUpload() {
     }
   };
 
-  const uploadToSupabase = async (file: File): Promise<string> => {
+  const uploadToSupabase = async (file: File, title: string, subjectCode: string): Promise<string> => {
     const timestamp = Date.now();
-    const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+    const sanitizedCode = subjectCode.replace(/[^a-zA-Z0-9]/g, '_');
+    const fileName = `${sanitizedCode}_${sanitizedTitle}_${timestamp}.pdf`;
     const filePath = `${fileName}`;
 
     // Supabase JS SDK doesn't have a native progress listener for simple uploads, 
@@ -110,7 +112,7 @@ export function PaperUpload() {
     setError(null);
 
     try {
-      const pdfUrl = await uploadToSupabase(file);
+      const pdfUrl = await uploadToSupabase(file, formData.title, formData.subjectCode);
 
       try {
         await addDoc(collection(db, 'papers'), {
