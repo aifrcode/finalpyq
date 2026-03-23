@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { auth, onAuthStateChanged, db, doc, getDoc, updateDoc, setDoc, serverTimestamp, FirebaseUser, signInWithPopup, googleProvider, handleFirestoreError, OperationType, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from './firebase';
 import { UserProfile, UserRole } from './types';
+import { toast } from 'react-hot-toast';
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -40,6 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (userDoc.exists()) {
           const data = userDoc.data() as UserProfile;
+          
+          // Check if user is blocked
+          if (data.blocked) {
+            await auth.signOut();
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+            toast.error('Your account has been blocked by an administrator.');
+            return;
+          }
+
           // Ensure initial admin always has admin role and is verified
           if (isInitialAdmin && (data.role !== 'admin' || !data.verified)) {
             const updatedProfile = { ...data, role: 'admin' as const, verified: true };

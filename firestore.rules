@@ -46,21 +46,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    function isNotBlocked() {
+      return isAuthenticated() && 
+             (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('blocked', false) != true);
     }
 
     function isAdmin() {
-      return isAuthenticated() &&
-        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-         request.auth.token.email == "rajan.fr0911@gmail.com");
+      return isAuthenticated() && 
+             (request.auth.token.email == "rajan.fr0911@gmail.com" || 
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'student') == 'admin'));
     }
 
     function isStaff() {
-      return isAuthenticated() && 
+      return isAuthenticated() && isNotBlocked() &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff';
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'student') == 'staff';
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -72,12 +74,13 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'name', 'role', 'verified', 'createdAt']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'name', 'role', 'verified', 'blocked', 'createdAt']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
              (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
              data.role in ['student', 'staff', 'admin'] &&
              data.verified is bool &&
+             (!('blocked' in data) || data.blocked is bool) &&
              (!('createdAt' in data) || data.createdAt is timestamp);
     }
 
@@ -104,24 +107,25 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data) && 
                     (request.resource.data.role == 'student' || isAdmin());
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
-                    (request.resource.data.role == resource.data.role || isAdmin());
+      allow update: if (isAuthenticated() && (request.auth.uid == userId || isAdmin())) && isValidUser(request.resource.data) && 
+                    (request.auth.uid == userId ? (request.resource.data.role == resource.data.role && request.resource.data.get('blocked', false) == resource.data.get('blocked', false)) : true);
+      allow delete: if isAdmin();
     }
 
     match /papers/{paperId} {
-      allow read: if resource.data.status == 'approved' || isAdmin() || (isAuthenticated() && resource.data.uploaderUid == request.auth.uid);
+      allow read: if resource.data.status == 'approved' || isAdmin() || isStaff() || (isAuthenticated() && resource.data.uploaderUid == request.auth.uid && isNotBlocked());
       allow create: if (isAuthenticated() ? 
-                        (request.resource.data.uploaderUid == request.auth.uid) : 
+                        (request.resource.data.uploaderUid == request.auth.uid && isNotBlocked()) : 
                         (request.resource.data.uploaderUid == 'anonymous')) &&
                       isValidPaper(request.resource.data) && 
                       request.resource.data.status == 'pending';
-      allow update: if (isAdmin() || (isStaff() && resource.data.status == 'pending')) && isValidPaper(request.resource.data) ||
+      allow update: if (isAdmin() || isStaff()) && isValidPaper(request.resource.data) ||
                     (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadCount']) &&
                      request.resource.data.downloadCount == resource.data.downloadCount + 1);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isStaff();
     }
 
     match /downloads/{downloadId} {

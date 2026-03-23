@@ -8,6 +8,7 @@ export interface UserProfile {
   name: string;
   role: UserRole;
   verified: boolean;
+  blocked?: boolean;
   createdAt?: Timestamp;
 }
 

@@ -4,7 +4,7 @@ import { db, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, or
 import { supabase } from '../supabase';
 import { Paper, UserProfile, UserRole } from '../types';
 import { PaperCard } from './PaperCard';
-import { Shield, Users, FileText, CheckCircle, XCircle, AlertCircle, Loader2, Download } from 'lucide-react';
+import { Shield, Users, FileText, CheckCircle, XCircle, AlertCircle, Loader2, Download, Trash2, Ban } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'react-hot-toast';
 
@@ -16,9 +16,9 @@ export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'papers' | 'users' | 'maintenance'>('papers');
 
   useEffect(() => {
-    if (profile?.role !== 'admin') return;
+    if (profile?.role !== 'admin' && profile?.role !== 'staff') return;
 
-    // Listen for pending papers
+    // Listen for papers
     const papersQuery = query(collection(db, 'papers'), orderBy('createdAt', 'desc'));
     const unsubscribePapers = onSnapshot(papersQuery, (snapshot) => {
       const papersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Paper[];
@@ -28,14 +28,17 @@ export function AdminDashboard() {
       handleFirestoreError(error, OperationType.LIST, 'papers', 'AdminDashboard: Fetch Papers');
     });
 
-    // Listen for users
-    const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
-    const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-      const usersData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })) as UserProfile[];
-      setUsers(usersData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users', 'AdminDashboard: Fetch Users');
-    });
+    // Listen for users (only for admins)
+    let unsubscribeUsers = () => {};
+    if (profile?.role === 'admin') {
+      const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+      unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+        const usersData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() })) as UserProfile[];
+        setUsers(usersData);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'users', 'AdminDashboard: Fetch Users');
+      });
+    }
 
     return () => {
       unsubscribePapers();
@@ -155,7 +158,27 @@ export function AdminDashboard() {
     }
   };
 
-  if (profile?.role !== 'admin') {
+  const handleBlockUser = async (uid: string, blocked: boolean) => {
+    if (!window.confirm(`Are you sure you want to ${blocked ? 'block' : 'unblock'} this user?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', uid), { blocked });
+      toast.success(`User ${blocked ? 'blocked' : 'unblocked'} successfully`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`, 'AdminDashboard: Block User');
+    }
+  };
+
+  const handleDeleteUser = async (uid: string) => {
+    if (!window.confirm('Are you sure you want to delete this user profile? This will not delete their Google account, but they will lose their role and verification status.')) return;
+    try {
+      await deleteDoc(doc(db, 'users', uid));
+      toast.success('User profile deleted successfully');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${uid}`, 'AdminDashboard: Delete User');
+    }
+  };
+
+  if (profile?.role !== 'admin' && profile?.role !== 'staff') {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <Shield className="w-16 h-16 text-red-500 mb-4" />
@@ -181,18 +204,22 @@ export function AdminDashboard() {
           >
             PAPERS
           </button>
-          <button 
-            onClick={() => setActiveTab('users')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
-          >
-            USERS
-          </button>
-          <button 
-            onClick={() => setActiveTab('maintenance')}
-            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'maintenance' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
-          >
-            MAINTENANCE
-          </button>
+          {profile?.role === 'admin' && (
+            <>
+              <button 
+                onClick={() => setActiveTab('users')}
+                className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'users' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
+              >
+                USERS
+              </button>
+              <button 
+                onClick={() => setActiveTab('maintenance')}
+                className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'maintenance' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
+              >
+                MAINTENANCE
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -287,15 +314,31 @@ export function AdminDashboard() {
                           </button>
                         </td>
                         <td className="p-6">
-                          <select 
-                            className="bg-black border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                            value={user.role}
-                            onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
-                          >
-                            <option value="student">Student</option>
-                            <option value="staff">Staff</option>
-                            <option value="admin">Admin</option>
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <select 
+                              className="bg-black border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                              value={user.role}
+                              onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
+                            >
+                              <option value="student">Student</option>
+                              <option value="staff">Staff</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <button
+                              onClick={() => handleBlockUser(user.uid, !user.blocked)}
+                              title={user.blocked ? "Unblock User" : "Block User"}
+                              className={`p-2 rounded-lg transition-all ${user.blocked ? 'bg-red-500 text-white' : 'bg-white/5 text-gray-400 hover:text-red-500'}`}
+                            >
+                              <Ban className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user.uid)}
+                              title="Delete User"
+                              className="p-2 rounded-lg bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -334,16 +377,30 @@ export function AdminDashboard() {
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Role</span>
-                        <select 
-                          className="bg-black border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                          value={user.role}
-                          onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
-                        >
-                          <option value="student">Student</option>
-                          <option value="staff">Staff</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                        <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Actions</span>
+                        <div className="flex items-center gap-2">
+                          <select 
+                            className="bg-black border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                            value={user.role}
+                            onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
+                          >
+                            <option value="student">Student</option>
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          <button
+                            onClick={() => handleBlockUser(user.uid, !user.blocked)}
+                            className={`p-2 rounded-lg transition-all ${user.blocked ? 'bg-red-500 text-white' : 'bg-white/5 text-gray-400 hover:text-red-500'}`}
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user.uid)}
+                            className="p-2 rounded-lg bg-white/5 text-gray-400 hover:bg-red-500 hover:text-white transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
