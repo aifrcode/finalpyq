@@ -52,9 +52,9 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         (request.auth.token.email == "rajan.fr0911@gmail.com" && request.auth.token.email_verified == true));
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+         request.auth.token.email == "rajan.fr0911@gmail.com");
     }
 
     function isStaff() {
@@ -72,11 +72,12 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'name', 'role', 'createdAt']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'name', 'role', 'verified', 'createdAt']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
              (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
              data.role in ['student', 'staff', 'admin'] &&
+             data.verified is bool &&
              (!('createdAt' in data) || data.createdAt is timestamp);
     }
 

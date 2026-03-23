@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User as FirebaseUser, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, getDocFromServer, addDoc, serverTimestamp, Timestamp, increment } from 'firebase/firestore';
 
 // Import the Firebase configuration
@@ -79,6 +79,6 @@ testConnection();
 
 export { 
   collection, doc, getDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, Timestamp,
-  signInWithPopup, onAuthStateChanged, increment
+  signInWithPopup, onAuthStateChanged, increment, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail
 };
 export type { FirebaseUser };

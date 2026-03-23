@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../useAuth';
 import { db, collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, orderBy, handleFirestoreError, OperationType } from '../firebase';
+import { supabase } from '../supabase';
 import { Paper, UserProfile, UserRole } from '../types';
 import { PaperCard } from './PaperCard';
-import { Shield, Users, FileText, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Shield, Users, FileText, CheckCircle, XCircle, AlertCircle, Loader2, Download } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'react-hot-toast';
 
 export function AdminDashboard() {
   const { profile } = useAuth();
   const [papers, setPapers] = useState<Paper[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'papers' | 'users'>('papers');
+  const [activeTab, setActiveTab] = useState<'papers' | 'users' | 'maintenance'>('papers');
 
   useEffect(() => {
     if (profile?.role !== 'admin') return;
@@ -50,11 +52,75 @@ export function AdminDashboard() {
   };
 
   const handleDeletePaper = async (id: string) => {
-    if (!window.confirm('Are you sure you want to permanently delete this paper?')) return;
+    const paper = papers.find(p => p.id === id);
+    if (!paper) return;
+
+    // window.confirm can be unreliable in iframes, so we'll proceed directly 
+    // or you could implement a custom React modal for confirmation.
     try {
+      // 1. Delete from Supabase Storage if it's a Supabase URL
+      if (paper.pdfUrl && paper.pdfUrl.includes('supabase.co')) {
+        try {
+          const urlParts = paper.pdfUrl.split('/');
+          const fileName = urlParts[urlParts.length - 1];
+          
+          await supabase.storage
+            .from('papers')
+            .remove([fileName]);
+        } catch (storageErr) {
+          console.error('Error deleting from Supabase Storage:', storageErr);
+        }
+      }
+
+      // 2. Delete from Firestore
       await deleteDoc(doc(db, 'papers', id));
+      toast.success('Paper deleted successfully');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `papers/${id}`, 'AdminDashboard: Delete Paper');
+    }
+  };
+
+  const handleDeleteCloudinaryPapers = async () => {
+    const cloudinaryPapers = papers.filter(p => p.pdfUrl && p.pdfUrl.includes('cloudinary.com'));
+    if (cloudinaryPapers.length === 0) {
+      toast.error('No Cloudinary papers found');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete all ${cloudinaryPapers.length} Cloudinary-hosted papers?`)) return;
+
+    setLoading(true);
+    let deletedCount = 0;
+    try {
+      for (const paper of cloudinaryPapers) {
+        await deleteDoc(doc(db, 'papers', paper.id));
+        deletedCount++;
+      }
+      toast.success(`Successfully deleted ${deletedCount} Cloudinary papers`);
+    } catch (error) {
+      toast.error('Failed to delete some papers');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetDownloads = async () => {
+    if (!window.confirm('Are you sure you want to reset ALL download counts to zero?')) return;
+
+    setLoading(true);
+    let resetCount = 0;
+    try {
+      for (const paper of papers) {
+        await updateDoc(doc(db, 'papers', paper.id), { downloadCount: 0 });
+        resetCount++;
+      }
+      toast.success(`Successfully reset ${resetCount} papers`);
+    } catch (error) {
+      toast.error('Failed to reset some counts');
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -63,6 +129,14 @@ export function AdminDashboard() {
       await updateDoc(doc(db, 'users', uid), { role });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`, 'AdminDashboard: Change User Role');
+    }
+  };
+
+  const handleVerificationChange = async (uid: string, verified: boolean) => {
+    try {
+      await updateDoc(doc(db, 'users', uid), { verified });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`, 'AdminDashboard: Change User Verification');
     }
   };
 
@@ -98,6 +172,12 @@ export function AdminDashboard() {
           >
             USERS
           </button>
+          <button 
+            onClick={() => setActiveTab('maintenance')}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'maintenance' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
+          >
+            MAINTENANCE
+          </button>
         </div>
       </div>
 
@@ -112,7 +192,7 @@ export function AdminDashboard() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
         >
-          {activeTab === 'papers' ? (
+          {activeTab === 'papers' && (
             <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="p-6 rounded-3xl bg-white/5 border border-white/10">
@@ -150,35 +230,96 @@ export function AdminDashboard() {
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto rounded-3xl border border-white/10 bg-white/5">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/5">
-                    <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Name</th>
-                    <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Email</th>
-                    <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Role</th>
-                    <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(user => (
-                    <tr key={user.uid} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                      <td className="p-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-                            <Users className="w-4 h-4" />
+          )}
+
+          {activeTab === 'users' && (
+            <div className="space-y-4">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto rounded-3xl border border-white/10 bg-white/5">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/5">
+                      <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Name</th>
+                      <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Email</th>
+                      <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Role</th>
+                      <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest text-center">Verified</th>
+                      <th className="p-6 text-xs font-mono text-emerald-500 uppercase tracking-widest">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map(user => (
+                      <tr key={user.uid} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                        <td className="p-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+                              <Users className="w-4 h-4" />
+                            </div>
+                            <span className="text-sm font-medium text-white">{user.name}</span>
                           </div>
-                          <span className="text-sm font-medium text-white">{user.name}</span>
+                        </td>
+                        <td className="p-6 text-sm text-gray-400">{user.email}</td>
+                        <td className="p-6">
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-mono uppercase ${user.role === 'admin' ? 'bg-red-500/10 text-red-500' : user.role === 'staff' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="p-6 text-center">
+                          <button
+                            onClick={() => handleVerificationChange(user.uid, !user.verified)}
+                            className={`p-2 rounded-xl transition-all ${user.verified ? 'bg-emerald-500/20 text-emerald-500' : 'bg-white/5 text-gray-500 hover:text-white'}`}
+                          >
+                            {user.verified ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                          </button>
+                        </td>
+                        <td className="p-6">
+                          <select 
+                            className="bg-black border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                            value={user.role}
+                            onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
+                          >
+                            <option value="student">Student</option>
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-4">
+                {users.map(user => (
+                  <div key={user.uid} className="p-6 rounded-3xl border border-white/10 bg-white/5 space-y-4">
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+                          <Users className="w-5 h-5" />
                         </div>
-                      </td>
-                      <td className="p-6 text-sm text-gray-400">{user.email}</td>
-                      <td className="p-6">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-mono uppercase ${user.role === 'admin' ? 'bg-red-500/10 text-red-500' : user.role === 'staff' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="p-6">
+                        <div>
+                          <h3 className="text-sm font-bold text-white">{user.name}</h3>
+                          <p className="text-xs text-gray-500">{user.email}</p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-[10px] font-mono uppercase ${user.role === 'admin' ? 'bg-red-500/10 text-red-500' : user.role === 'staff' ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                        {user.role}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Verified</span>
+                        <button
+                          onClick={() => handleVerificationChange(user.uid, !user.verified)}
+                          className={`p-2 rounded-xl transition-all ${user.verified ? 'bg-emerald-500/20 text-emerald-500' : 'bg-white/5 text-gray-500 hover:text-white'}`}
+                        >
+                          {user.verified ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">Role</span>
                         <select 
                           className="bg-black border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                           value={user.role}
@@ -188,11 +329,50 @@ export function AdminDashboard() {
                           <option value="staff">Staff</option>
                           <option value="admin">Admin</option>
                         </select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'maintenance' && (
+            <div className="max-w-xl space-y-8">
+              <div className="p-8 rounded-[2.5rem] bg-white/5 border border-white/10 space-y-6">
+                <h3 className="text-xl font-bold text-white uppercase tracking-tight">System Maintenance</h3>
+                <p className="text-gray-500 text-sm">Perform bulk actions to clean up the database and storage.</p>
+                
+                <div className="space-y-4">
+                  <div className="p-6 rounded-2xl bg-red-500/5 border border-red-500/10 space-y-4">
+                    <div className="flex items-center gap-3 text-red-500">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="text-sm font-bold uppercase tracking-tight">Cloudinary Cleanup</span>
+                    </div>
+                    <p className="text-xs text-gray-500">Delete all papers that are still hosted on Cloudinary. This will remove them from the portal permanently.</p>
+                    <button 
+                      onClick={handleDeleteCloudinaryPapers}
+                      className="w-full py-3 rounded-xl bg-red-500 text-white font-bold text-xs hover:bg-red-600 transition-colors"
+                    >
+                      DELETE ALL CLOUDINARY PAPERS
+                    </button>
+                  </div>
+
+                  <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 space-y-4">
+                    <div className="flex items-center gap-3 text-amber-500">
+                      <Download className="w-5 h-5" />
+                      <span className="text-sm font-bold uppercase tracking-tight">Reset Statistics</span>
+                    </div>
+                    <p className="text-xs text-gray-500">Reset the download count for all papers across the entire portal to zero.</p>
+                    <button 
+                      onClick={handleResetDownloads}
+                      className="w-full py-3 rounded-xl bg-amber-500 text-black font-bold text-xs hover:bg-amber-400 transition-colors"
+                    >
+                      RESET ALL DOWNLOAD COUNTS
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </motion.div>

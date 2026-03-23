@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../useAuth';
 import { db, collection, addDoc, serverTimestamp, handleFirestoreError, OperationType } from '../firebase';
+import { supabase } from '../supabase';
 import { School, ExamType, SCHOOLS, EXAM_TYPES, SEMESTERS } from '../types';
 import { Upload, FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'react-hot-toast';
 
 export function PaperUpload() {
   const { user, profile } = useAuth();
@@ -22,65 +24,81 @@ export function PaperUpload() {
     year: new Date().getFullYear()
   });
 
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      if (selectedFile.type !== 'application/pdf') {
-        setError('Only PDF files are allowed.');
-        return;
-      }
-      if (selectedFile.size > 10 * 1024 * 1024) { // 10MB limit
-        setError('File size must be less than 10MB.');
-        return;
-      }
-      setFile(selectedFile);
-      setError(null);
+      processFile(selectedFile);
     }
   };
 
-  const uploadToCloudinary = async (file: File) => {
-    // 1. Get signature from server
-    let sigResponse;
-    try {
-      sigResponse = await fetch('/api/cloudinary-signature');
-    } catch (e) {
-      throw new Error('Network error: Could not reach the signature server.');
+  const processFile = (selectedFile: File) => {
+    if (selectedFile.type !== 'application/pdf') {
+      setError('Only PDF files are allowed.');
+      setFile(null);
+      setPreviewUrl(null);
+      return;
+    }
+    if (selectedFile.size > 10 * 1024 * 1024) { // 10MB limit
+      setError('File size must be less than 10MB.');
+      setFile(null);
+      setPreviewUrl(null);
+      return;
+    }
+    setFile(selectedFile);
+    setError(null);
+    setPreviewUrl(URL.createObjectURL(selectedFile));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const uploadToSupabase = async (file: File): Promise<string> => {
+    const timestamp = Date.now();
+    const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const filePath = `${fileName}`;
+
+    // Supabase JS SDK doesn't have a native progress listener for simple uploads, 
+    // but we can simulate it or just show a loader. 
+    // For now, we'll just set it to 50% then 100% on completion.
+    setUploadProgress(10);
+
+    const { data, error } = await supabase.storage
+      .from('papers')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      throw error;
     }
 
-    if (!sigResponse.ok) {
-      const errorData = await sigResponse.json();
-      throw new Error(`Signature Error: ${errorData.error || 'Failed to get upload signature'}`);
-    }
-    const { signature, timestamp, cloud_name, api_key, upload_preset } = await sigResponse.json();
+    setUploadProgress(90);
 
-    // 2. Upload to Cloudinary
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('signature', signature);
-    formData.append('timestamp', timestamp);
-    formData.append('api_key', api_key);
-    formData.append('upload_preset', upload_preset);
+    const { data: { publicUrl } } = supabase.storage
+      .from('papers')
+      .getPublicUrl(filePath);
 
-    let uploadResponse;
-    try {
-      uploadResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloud_name}/raw/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-    } catch (e) {
-      throw new Error('Network error: Could not connect to Cloudinary servers.');
-    }
-
-    if (!uploadResponse.ok) {
-      const errorData = await uploadResponse.json();
-      throw new Error(`Cloudinary Error: ${errorData.error?.message || 'Failed to upload to Cloudinary'}`);
-    }
-
-    const uploadData = await uploadResponse.json();
-    return uploadData.secure_url;
+    setUploadProgress(100);
+    return publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,10 +106,11 @@ export function PaperUpload() {
     if (!file || !formData.school || !formData.examType || !formData.semester) return;
 
     setUploading(true);
+    setUploadProgress(0);
     setError(null);
 
     try {
-      const pdfUrl = await uploadToCloudinary(file);
+      const pdfUrl = await uploadToSupabase(file);
 
       try {
         await addDoc(collection(db, 'papers'), {
@@ -102,6 +121,7 @@ export function PaperUpload() {
           downloadCount: 0,
           createdAt: serverTimestamp()
         });
+        toast.success('Paper submitted successfully!');
       } catch (firestoreErr) {
         handleFirestoreError(firestoreErr, OperationType.CREATE, 'papers', 'PaperUpload: Save to Firestore');
       }
@@ -130,6 +150,11 @@ export function PaperUpload() {
         // Not a JSON error, use the raw message if available
         errorMessage = err.message || errorMessage;
       }
+
+      // Special handling for Supabase config errors
+      if (errorMessage.includes('Supabase configuration is missing')) {
+        errorMessage = 'Supabase configuration is missing. Please check your AI Studio Secrets.';
+      }
       
       setError(errorMessage);
     } finally {
@@ -145,8 +170,8 @@ export function PaperUpload() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">CONTRIBUTE PAPER</h1>
         <p className="text-gray-500">
-          Students and staff can upload previous year question papers. 
-          No sign-in required for students. All uploads are reviewed by an administrator before appearing in the portal.
+          Anybody can contribute previous year question papers. 
+          No sign-in required for uploads. All submissions are reviewed by an administrator before appearing in the portal.
         </p>
       </div>
 
@@ -170,7 +195,10 @@ export function PaperUpload() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div 
             onClick={() => fileInputRef.current?.click()}
-            className={`relative p-12 rounded-3xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center text-center ${file ? 'border-emerald-500 bg-emerald-500/5' : 'border-white/10 hover:border-emerald-500/50 hover:bg-white/5'}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`relative p-12 rounded-3xl border-2 border-dashed transition-all duration-300 cursor-pointer flex flex-col items-center justify-center text-center ${isDragging ? 'border-emerald-500 bg-emerald-500/10 scale-[1.02]' : file ? 'border-emerald-500 bg-emerald-500/5' : 'border-white/10 hover:border-emerald-500/50 hover:bg-white/5'}`}
           >
             <input 
               type="file" 
@@ -180,15 +208,50 @@ export function PaperUpload() {
               accept=".pdf"
             />
             {file ? (
-              <>
+              <div className="w-full flex flex-col items-center">
                 <FileText className="w-12 h-12 text-emerald-500 mb-4" />
                 <span className="text-white font-medium">{file.name}</span>
                 <span className="text-xs text-gray-500 mt-2">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
-              </>
+                
+                {previewUrl && (
+                  <div className="mt-6 w-full p-6 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-3 text-emerald-500">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="text-sm font-bold uppercase tracking-tight">PDF Document Ready</span>
+                    </div>
+                    <a 
+                      href={previewUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-gray-400 hover:text-emerald-500 underline transition-colors"
+                    >
+                      Open preview in new tab
+                    </a>
+                  </div>
+                )}
+
+                {uploading && (
+                  <div className="mt-6 w-full">
+                    <div className="flex justify-between text-[10px] font-mono text-emerald-500 mb-1">
+                      <span>UPLOADING</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                      <motion.div 
+                        className="h-full bg-emerald-500"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 <Upload className="w-12 h-12 text-gray-600 mb-4" />
-                <span className="text-white font-medium">Click to select PDF</span>
+                <span className="text-white font-medium">
+                  {isDragging ? 'Drop PDF here' : 'Click or drag PDF here'}
+                </span>
                 <span className="text-xs text-gray-500 mt-2">Maximum file size: 10MB</span>
               </>
             )}
